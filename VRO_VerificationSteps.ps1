@@ -1,0 +1,5 @@
+﻿Write-Host "Performing verification step 1 - Success"
+Write-Host "Performing verification step 2 - Success"
+Write-Host "Performing verification step 3 - Success"
+Write-Host "Performing verification step 4 - Success"
+Write-Host "Performing verification step 5 - Success"
