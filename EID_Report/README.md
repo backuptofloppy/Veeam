@@ -77,8 +77,6 @@ If you don't pass `-HtmlPath`, the report is saved in the current folder:
 | `-HtmlPath` | auto | Path for the HTML report. See the naming table above |
 | `-StaleHours` | `24` | Flags a job as Stale if its newest restore point is older than this |
 | `-EntraRepositoryLabel` | `Microsoft Entra ID Repository (PostgreSQL)` | Name shown for the built-in Entra ID repository (see Notes) |
-| `-LogFileTimesAreLocal` | off | Treats log file timestamps as server local time instead of UTC |
-| `-PassThru` | off | Also returns the report data as objects (`Summary`, `RestorePoints`, `LogJobs`, `LogRestorePoints`) |
 
 ## Signing in
 
