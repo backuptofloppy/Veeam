@@ -44,10 +44,10 @@ Works against both Windows-based VBR servers and the Veeam Software Appliance (V
 ## Quick start
 
 ```powershell
-# Veeam Software Appliance or any server that needs a VBR login
+# Sign in with a VBR user name and password (any server)
 .\Get-VBREntraIDBackupReport.ps1 -Server vbr01.corp.local -Login -ForceAcceptTlsCertificate
 
-# Windows-based VBR server, signing in with your Windows identity
+# Sign in as your current Windows user (Windows-based VBR, or a domain-joined VSA)
 .\Get-VBREntraIDBackupReport.ps1 -Server vbr01.corp.local
 
 # Tenant backups only
@@ -80,8 +80,9 @@ If you don't pass `-HtmlPath`, the report is saved in the current folder:
 
 ## Signing in
 
-- **Windows-based VBR:** run without `-Login` to use your Windows identity. Your account, or a group it belongs to, must be in **Users and Roles** on the server.
-- **Veeam Software Appliance:** Windows identity sign-in isn't supported, so use `-Login`. If you forget, the script detects the error and prompts for credentials.
+- **Current Windows user:** run without `-Login` to sign in with your Windows identity. This works on Windows-based VBR servers and on a Veeam Software Appliance that has been joined to an Active Directory domain. Your account, or a group it belongs to, must be in **Users and Roles** on the server.
+- **Non-domain-joined servers:** a VSA that isn't joined to a domain can't accept Windows identity sign-in, so use `-Login`. 
+- **SAML accounts** aren't supported for PowerShell sign-in. Use a local or domain account.
 - **MFA:** accounts with MFA enabled can't sign in from PowerShell. Use a VBR account flagged as a service account.
 - If you're already connected (for example, running from the VBR console's PowerShell window), the existing session is reused.
 
@@ -100,10 +101,10 @@ The script opens a read-only file-level browse session on each log backup (`Star
 
 ## Notes and limitations
 
-- **Restore sessions appear in history.** Item counts and log file counts each open a read-only session. These show up in VBR session history and the audit log. 
+- **Restore sessions appear in history.** Item counts and log file counts each open a read-only session. These show up in VBR session history and the audit log. Mention this before running the script in a customer environment.
 - **Log counts are hours, not entries.** A count of 24 audit log files means 24 hours of audit logs, not 24 log entries. Counting individual entries would require restoring and parsing the files.
+- **Log data size is a job-level total.** Veeam doesn't expose per-file sizes, so Data Size is the amount the job transferred in that run, covering both log types.
 - **Sign-in logs need Entra ID P1 or P2.** On tenants without that license, Veeam skips sign-in logs and the report shows `0 - Skipped (license)`.
-- **Repository name for tenant backups.** Tenant backups are stored in a PostgreSQL-based Entra ID repository that PowerShell can't query by name, so the report shows `-EntraRepositoryLabel` instead.
 - **Session history retention.** If a job session has been purged from VBR history, the role assignment and OAuth2 columns show N/A for that restore point.
 
 ## Troubleshooting
@@ -112,7 +113,7 @@ The script opens a read-only file-level browse session on each log backup (`Star
 |---|---|
 | `Failed to connect ... timed out` | Wrong port. v13 uses 443, v12 uses 9392 |
 | `InternalServerError` when connecting | Windows identity rejected, or the console build doesn't match the server. Try `-Login` |
-| `grant type value is not supported` | The server doesn't accept Windows identity sign-in (typical on the VSA). Use `-Login` |
+| `grant type value is not supported` | The server doesn't accept Windows identity sign-in, typically a VSA that isn't joined to a domain. Use `-Login`, or join the VSA to the domain |
 | Object counts show N/A | A restore session couldn't be opened, often because one from an earlier run is still open. Close it in the console under History > Restore |
 | Log file counts show a status instead of a number | The browse session failed. The console warning and the note in the report give the reason |
 | Role assignment or OAuth2 columns show N/A | The job session has aged out of history, or the VBR build or tenant license doesn't protect those types |
