@@ -102,13 +102,10 @@ The script opens a read-only file-level browse session on each log backup (`Star
 
 ## Notes and limitations
 
-- **Restore sessions appear in history.** Item counts and log file counts each open a read-only session. These show up in VBR session history and the audit log. Mention this before running the script in a customer environment.
+- **Restore sessions appear in history.** Item counts and log file counts each open a read-only session. These show up in VBR session history and the audit log. 
 - **Log counts are hours, not entries.** A count of 24 audit log files means 24 hours of audit logs, not 24 log entries. Counting individual entries would require restoring and parsing the files.
-- **Log data size is a job-level total.** Veeam doesn't expose per-file sizes, so Data Size is the amount the job transferred in that run, covering both log types.
 - **Sign-in logs need Entra ID P1 or P2.** On tenants without that license, Veeam skips sign-in logs and the report shows `0 - Skipped (license)`.
 - **Repository name for tenant backups.** Tenant backups are stored in a PostgreSQL-based Entra ID repository that PowerShell can't query by name, so the report shows `-EntraRepositoryLabel` instead.
-- **Session-log values use unsupported internals.** Role assignment and OAuth2 counts read the session log through the `Logger` property, which Veeam doesn't officially support. They may need adjusting after a VBR upgrade.
-- **10,000 item browse limit.** File-level browsing returns up to 10,000 items. Long log retention can exceed this, and the report flags the counts as truncated if it does.
 - **Session history retention.** If a job session has been purged from VBR history, the role assignment and OAuth2 columns show N/A for that restore point.
 
 ## Troubleshooting
