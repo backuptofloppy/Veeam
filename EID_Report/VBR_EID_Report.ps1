@@ -1,4 +1,4 @@
- <#
+<#
 .SYNOPSIS
     Reports on all Microsoft Entra ID tenant backups on a Veeam Backup & Replication server.
 
@@ -76,6 +76,16 @@
       Entra ID Report - Tenant - <yyyy-MM-dd HHmm>.html           (-ReportType Tenant)
       Entra ID Report - Log - <yyyy-MM-dd HHmm>.html              (-ReportType Logs)
 
+.PARAMETER Csv
+    Exports the report data as CSV files instead of the HTML report (no HTML
+    is generated). Files are saved in the current folder, or in the folder of
+    -HtmlPath if given, using the same naming convention as the HTML report.
+    Only the sections selected by -ReportType are written:
+      <report name> - Tenant Jobs.csv
+      <report name> - Tenant Restore Points.csv
+      <report name> - Log Jobs.csv
+      <report name> - Log Restore Points.csv
+
 .PARAMETER PassThru
     Returns an object with Summary, RestorePoints, LogJobs and LogRestorePoints
     properties for pipeline use.
@@ -104,6 +114,9 @@
     .\Get-VBREntraIDBackupReport.ps1 -Server 192.168.0.45 -Login -ForceAcceptTlsCertificate
 
 .EXAMPLE
+    .\Get-VBREntraIDBackupReport.ps1 -Server vbr01.corp.local -Login -Csv
+
+.EXAMPLE
     .\Get-VBREntraIDBackupReport.ps1 -Server vbr01.corp.local -Port 9392 -ReportType Tenant
 
 .EXAMPLE
@@ -124,6 +137,7 @@ param(
     [switch]$Login,
     [switch]$ForceAcceptTlsCertificate,
     [string]$HtmlPath,
+    [switch]$Csv,
     [int]$StaleHours = 24,
     [string]$EntraRepositoryLabel = "Microsoft Entra ID Repository (PostgreSQL)",
     [switch]$LogFileTimesAreLocal,
@@ -164,10 +178,30 @@ if (-not $existing) {
     try {
         Connect-VBRServer @connectArgs
         $weConnected = $true
-        Write-Host "Connected to $Server" -ForegroundColor Green
+        Write-Host "Connected to $Server`n" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to connect to ${Server}:$Port. $($_.Exception.Message)"
+        $connectError = $_.Exception.Message
+        # Windows identity sign-in failed: fall back to prompting for a VBR login
+        if (-not $Login) {
+            if ($connectError -match 'grant type') {
+                Write-Warning "$Server doesn't accept Windows identity sign-in (typically a Veeam Software Appliance that isn't joined to a domain). Prompting for credentials."
+            } else {
+                Write-Warning "Windows identity sign-in to $Server failed ($connectError). Prompting for credentials."
+            }
+            $cred = Get-Credential -Message "Enter VBR credentials for $Server"
+            if ($cred) {
+                try {
+                    $connectArgs.Credential = $cred
+                    Connect-VBRServer @connectArgs
+                    $weConnected = $true
+                    Write-Host "Connected to $Server`n" -ForegroundColor Green
+                } catch { $connectError = $_.Exception.Message }
+            }
+        }
+    }
+    if (-not $weConnected) {
+        Write-Error "Failed to connect to ${Server}:$Port. $connectError"
         return
     }
 }
@@ -1147,7 +1181,33 @@ try {
         $HtmlPath = Join-Path (Get-Location).Path ("Entra ID Report - {0} - {1:yyyy-MM-dd HHmm}.html" -f $scope, (Get-Date))
     }
 
-    if ($HtmlPath) {
+    #region CSV export
+    if ($Csv) {
+        $csvDir  = Split-Path $HtmlPath -Parent
+        if (-not $csvDir) { $csvDir = (Get-Location).Path }
+        $csvBase = [IO.Path]::GetFileNameWithoutExtension($HtmlPath)
+        if (-not (Test-Path $csvDir)) { New-Item -ItemType Directory -Path $csvDir -Force | Out-Null }
+
+        $exports = [ordered]@{}
+        if ($includeTenant) {
+            $exports['Tenant Jobs']           = $report
+            $exports['Tenant Restore Points'] = $rpReport.ToArray()
+        }
+        if ($includeLogs) {
+            $exports['Log Jobs']              = $logReport
+            $exports['Log Restore Points']    = $logRpReport.ToArray()
+        }
+        foreach ($name in $exports.Keys) {
+            $rows = @($exports[$name])
+            if ($rows.Count -eq 0) { continue }
+            $file = Join-Path $csvDir ("{0} - {1}.csv" -f $csvBase, $name)
+            $rows | Export-Csv -Path $file -NoTypeInformation -Encoding UTF8
+            Write-Host "CSV saved to $file" -ForegroundColor Yellow
+        }
+    }
+    #endregion
+
+    if (-not $Csv) {
         $css = @"
 <style>
 body { font-family: Segoe UI, Arial, sans-serif; font-size: 13px; }
@@ -1297,7 +1357,7 @@ tr:nth-child(even) { background: #f4f4f4; }
         # ConvertTo-Html with no input emits an empty <table>; it adds a gap under the header
         $html = $html -replace '(?s)<table>\s*</table>', ''
         $html | Out-File -FilePath $HtmlPath -Encoding UTF8
-        Write-Host "HTML saved to $HtmlPath" -ForegroundColor Green
+        Write-Host "HTML saved to $HtmlPath" -ForegroundColor Yellow
     }
 
     if ($PassThru) {
@@ -1312,4 +1372,4 @@ tr:nth-child(even) { background: #f4f4f4; }
 }
 finally {
     if ($weConnected) { Disconnect-VBRServer }
-} 
+}
